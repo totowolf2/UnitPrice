@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/product.dart';
 import '../../domain/use_cases/manage_products.dart';
 import '../../data/models/product_model.dart';
+import '../../data/models/category_model.dart';
 import '../../../../core/constants/unit_types.dart';
 import 'product_provider.dart';
 
@@ -14,7 +15,7 @@ class ProductFormState {
   final double unitAmount;
   final Unit unit;
   final String? imagePath;
-  final String? categoryId;
+  final String? categoryName;
   final Map<String, String?> errors;
   final bool isLoading;
   final bool isValid;
@@ -26,7 +27,7 @@ class ProductFormState {
     this.unitAmount = 0.0,
     this.unit = Unit.piece,
     this.imagePath,
-    this.categoryId,
+    this.categoryName,
     this.errors = const {},
     this.isLoading = false,
     this.isValid = false,
@@ -39,7 +40,7 @@ class ProductFormState {
     double? unitAmount,
     Unit? unit,
     String? imagePath,
-    String? categoryId,
+    String? categoryName,
     Map<String, String?>? errors,
     bool? isLoading,
     bool? isValid,
@@ -51,14 +52,14 @@ class ProductFormState {
       unitAmount: unitAmount ?? this.unitAmount,
       unit: unit ?? this.unit,
       imagePath: imagePath ?? this.imagePath,
-      categoryId: categoryId ?? this.categoryId,
+      categoryName: categoryName ?? this.categoryName,
       errors: errors ?? this.errors,
       isLoading: isLoading ?? this.isLoading,
       isValid: isValid ?? this.isValid,
     );
   }
   
-  ProductModel toProduct() {
+  ProductModel toProduct({String? categoryId}) {
     return ProductModel.create(
       name: name,
       price: price,
@@ -112,11 +113,22 @@ class ProductFormNotifier extends StateNotifier<ProductFormState> {
     state = state.copyWith(imagePath: imagePath);
   }
   
-  void updateCategoryId(String? categoryId) {
-    state = state.copyWith(categoryId: categoryId);
+  void updateCategoryName(String? categoryName) {
+    state = state.copyWith(categoryName: categoryName);
   }
   
-  void loadProduct(Product product) {
+  Future<void> loadProduct(Product product) async {
+    String? categoryName;
+    if (product.categoryId != null) {
+      try {
+        final categoryId = int.parse(product.categoryId!);
+        final category = await _useCase.getCategoryById(categoryId);
+        categoryName = category?.name;
+      } catch (e) {
+        categoryName = null;
+      }
+    }
+    
     state = ProductFormState(
       name: product.name,
       price: product.price,
@@ -124,7 +136,7 @@ class ProductFormNotifier extends StateNotifier<ProductFormState> {
       unitAmount: product.unitAmount,
       unit: product.unit,
       imagePath: product.imagePath,
-      categoryId: product.categoryId,
+      categoryName: categoryName,
     );
     _validate();
   }
@@ -139,7 +151,10 @@ class ProductFormNotifier extends StateNotifier<ProductFormState> {
     state = state.copyWith(isLoading: true);
     
     try {
-      final product = state.toProduct();
+      // Find or create category
+      String? categoryId = await _getCategoryId(state.categoryName);
+      
+      final product = state.toProduct(categoryId: categoryId);
       await _useCase.saveProduct(product);
       state = state.copyWith(isLoading: false);
       return true;
@@ -158,6 +173,9 @@ class ProductFormNotifier extends StateNotifier<ProductFormState> {
     state = state.copyWith(isLoading: true);
     
     try {
+      // Find or create category
+      String? categoryId = await _getCategoryId(state.categoryName);
+      
       final product = existingProduct as ProductModel;
       product.updateWith(
         name: state.name,
@@ -166,7 +184,7 @@ class ProductFormNotifier extends StateNotifier<ProductFormState> {
         unitAmount: state.unitAmount,
         unit: state.unit,
         imagePath: state.imagePath,
-        categoryId: state.categoryId,
+        categoryId: categoryId,
       );
       
       await _useCase.updateProduct(product);
@@ -178,6 +196,35 @@ class ProductFormNotifier extends StateNotifier<ProductFormState> {
         errors: {'general': 'เกิดข้อผิดพลาดในการอัปเดต: $error'},
       );
       return false;
+    }
+  }
+
+  Future<String?> _getCategoryId(String? categoryName) async {
+    if (categoryName == null || categoryName.trim().isEmpty) {
+      // Use default category "อื่นๆ" if no category specified
+      final defaultCategory = await _useCase.getDefaultCategory();
+      return defaultCategory.id.toString();
+    }
+    
+    // Check if category already exists
+    final categories = await _useCase.getAllCategories();
+    try {
+      final existingCategory = categories.firstWhere(
+        (category) => category.name.toLowerCase() == categoryName.trim().toLowerCase(),
+      );
+      return existingCategory.id.toString();
+    } catch (e) {
+      // Create new category if it doesn't exist
+      final newCategory = CategoryModel.create(name: categoryName.trim());
+      await _useCase.saveCategory(newCategory);
+      
+      // After saving, the ID will be assigned by Isar
+      // Find the newly created category to get its ID
+      final savedCategories = await _useCase.getAllCategories();
+      final savedCategory = savedCategories.firstWhere(
+        (category) => category.name.toLowerCase() == categoryName.trim().toLowerCase(),
+      );
+      return savedCategory.id.toString();
     }
   }
   

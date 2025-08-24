@@ -7,79 +7,157 @@ import '../../../../core/constants/theme_constants.dart';
 import '../../../../shared/widgets/loading_indicator.dart';
 import '../providers/category_provider.dart';
 
-class CategorySelector extends ConsumerWidget {
-  // Selected category id is stored as String? for compatibility
-  final String? selectedCategoryId;
+class CategorySelector extends ConsumerStatefulWidget {
+  // Selected category name is now stored as String? 
+  final String? selectedCategoryName;
   final ValueChanged<String?> onChanged;
   final bool enabled;
   final String? labelText;
   
   const CategorySelector({
     super.key,
-    required this.selectedCategoryId,
+    required this.selectedCategoryName,
     required this.onChanged,
     this.enabled = true,
     this.labelText,
   });
   
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CategorySelector> createState() => _CategorySelectorState();
+}
+
+class _CategorySelectorState extends ConsumerState<CategorySelector> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  bool _showSuggestions = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.text = widget.selectedCategoryName ?? '';
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    setState(() {
+      _showSuggestions = _focusNode.hasFocus;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider);
     
     return categoriesAsync.when(
-      data: (categories) => _buildCategoryDropdown(context, categories),
-      loading: () => _buildLoadingDropdown(context),
-      error: (error, stackTrace) => _buildErrorDropdown(context, error),
+      data: (categories) => _buildCategoryInput(context, categories),
+      loading: () => _buildLoadingInput(context),
+      error: (error, stackTrace) => _buildErrorInput(context, error),
     );
   }
   
-  Widget _buildCategoryDropdown(BuildContext context, List<Category> categories) {
-    // Add "no category" option
-    final items = [
-      const DropdownMenuItem<String?>(
-        value: null,
-        child: Text('ไม่ระบุหมวดหมู่'),
+  Widget _buildCategoryInput(BuildContext context, List<Category> categories) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _controller,
+          focusNode: _focusNode,
+          enabled: widget.enabled,
+          onChanged: (value) {
+            widget.onChanged(value.trim().isEmpty ? null : value.trim());
+            setState(() {});
+          },
+          decoration: InputDecoration(
+            labelText: widget.labelText ?? AppStrings.category,
+            prefixIcon: const Icon(Icons.category),
+            hintText: 'พิมพ์หมวดหมู่หรือเลือกจากรายการ',
+          ),
+        ),
+        if (_showSuggestions && categories.isNotEmpty) 
+          _buildSuggestionsList(categories),
+      ],
+    );
+  }
+
+  Widget _buildSuggestionsList(List<Category> categories) {
+    final filteredCategories = categories.where((category) {
+      return category.name.toLowerCase().contains(_controller.text.toLowerCase());
+    }).toList();
+
+    if (filteredCategories.isEmpty && _controller.text.isNotEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+        borderRadius: BorderRadius.circular(8),
+        color: Theme.of(context).colorScheme.surface,
       ),
-      ...categories.map((category) => DropdownMenuItem<String?>(
-        // Convert int id to String for the dropdown value
-        value: category.id.toString(),
-        child: Text(category.name),
-      )).toList(),
-    ];
-    
-    return DropdownButtonFormField<String?>(
-      value: selectedCategoryId,
-      onChanged: enabled ? onChanged : null,
-      decoration: InputDecoration(
-        labelText: labelText ?? AppStrings.category,
-        prefixIcon: const Icon(Icons.category),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_controller.text.isEmpty)
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.clear),
+              title: const Text('ไม่ระบุหมวดหมู่'),
+              onTap: () {
+                _controller.clear();
+                widget.onChanged(null);
+                _focusNode.unfocus();
+              },
+            ),
+          ...filteredCategories.map((category) => ListTile(
+            dense: true,
+            leading: const Icon(Icons.category),
+            title: Text(category.name),
+            onTap: () {
+              _controller.text = category.name;
+              widget.onChanged(category.name);
+              _focusNode.unfocus();
+            },
+          )),
+        ],
       ),
-      items: items,
     );
   }
   
-  Widget _buildLoadingDropdown(BuildContext context) {
-    return DropdownButtonFormField<String?>(
-      onChanged: null,
+  Widget _buildLoadingInput(BuildContext context) {
+    return TextFormField(
+      controller: _controller,
+      enabled: false,
       decoration: InputDecoration(
-        labelText: labelText ?? AppStrings.category,
+        labelText: widget.labelText ?? AppStrings.category,
         prefixIcon: const Icon(Icons.category),
-        // Use the small loading indicator variant
         suffixIcon: LoadingIndicatorVariants.small(),
       ),
-      items: const [],
     );
   }
   
-  Widget _buildErrorDropdown(BuildContext context, Object error) {
-    return DropdownButtonFormField<String?>(
-      onChanged: null,
+  Widget _buildErrorInput(BuildContext context, Object error) {
+    return TextFormField(
+      controller: _controller,
+      focusNode: _focusNode,
+      enabled: widget.enabled,
+      onChanged: (value) {
+        widget.onChanged(value.trim().isEmpty ? null : value.trim());
+      },
       decoration: InputDecoration(
-        labelText: labelText ?? AppStrings.category,
+        labelText: widget.labelText ?? AppStrings.category,
         prefixIcon: const Icon(Icons.category),
-        errorText: 'ไม่สามารถโหลดหมวดหมู่ได้',
+        hintText: 'พิมพ์หมวดหมู่',
+        helperText: 'ไม่สามารถโหลดรายการหมวดหมู่ได้',
+        helperStyle: TextStyle(color: Theme.of(context).colorScheme.error),
       ),
-      items: const [],
     );
   }
 }

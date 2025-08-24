@@ -44,8 +44,8 @@ class _ProductFormState extends ConsumerState<ProductForm> {
     super.initState();
     
     if (widget.existingProduct != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(productFormProvider.notifier).loadProduct(widget.existingProduct!);
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await ref.read(productFormProvider.notifier).loadProduct(widget.existingProduct!);
         _updateControllers();
       });
     } else {
@@ -99,9 +99,9 @@ class _ProductFormState extends ConsumerState<ProductForm> {
                   _buildPriceField(state),
                   const SizedBox(height: ThemeConstants.spacingM),
                   CategorySelector(
-                    selectedCategoryId: state.categoryId,
-                    onChanged: (categoryId) {
-                      ref.read(productFormProvider.notifier).updateCategoryId(categoryId);
+                    selectedCategoryName: state.categoryName,
+                    onChanged: (categoryName) {
+                      ref.read(productFormProvider.notifier).updateCategoryName(categoryName);
                     },
                   ),
                 ],
