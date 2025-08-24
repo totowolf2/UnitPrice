@@ -88,6 +88,41 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           
+          // Advanced Features
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionTitle(context, 'ฟีเจอร์ขั้นสูง'),
+                const SizedBox(height: ThemeConstants.spacingM),
+                
+                ListTile(
+                  leading: const Icon(Icons.inventory_2_outlined),
+                  title: const Text('จัดการสินค้า'),
+                  subtitle: const Text('เพิ่ม แก้ไข หรือลบสินค้าที่บันทึกไว้'),
+                  trailing: const Icon(Icons.arrow_forward_ios),
+                  onTap: () => _navigateToProductManagement(context),
+                ),
+                
+                ListTile(
+                  leading: const Icon(Icons.category_outlined),
+                  title: const Text('จัดการหมวดหมู่'),
+                  subtitle: const Text('สร้างและจัดระเบียบหมวดหมู่สินค้า'),
+                  trailing: const Icon(Icons.arrow_forward_ios),
+                  onTap: () => _navigateToCategoryManagement(context),
+                ),
+                
+                ListTile(
+                  leading: const Icon(Icons.settings_applications_outlined),
+                  title: const Text('ตั้งค่าขั้นสูง'),
+                  subtitle: const Text('กำหนดหน่วยเริ่มต้น และการตั้งค่าอื่นๆ'),
+                  trailing: const Icon(Icons.arrow_forward_ios),
+                  onTap: () => _showAdvancedSettings(context),
+                ),
+              ],
+            ),
+          ),
+          
           // Data Management
           AppCard(
             child: Column(
@@ -456,6 +491,83 @@ class SettingsScreen extends ConsumerWidget {
               },
             ),
           ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('ปิด'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _navigateToProductManagement(BuildContext context) {
+    Navigator.of(context).pushNamed('/products');
+    // TODO: Update navigation to use proper route
+    // For now, show info dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('จัดการสินค้า'),
+        content: const Text(
+          'ฟีเจอร์นี้ให้เข้าถึงการจัดการสินค้าแบบละเอียด '
+          'รวมถึงการเพิ่ม แก้ไข และลบสินค้าที่บันทึกไว้ '
+          'ซึ่งเหมาะสำหรับผู้ใช้ขั้นสูง',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('ปิด'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _navigateToCategoryManagement(BuildContext context) {
+    // TODO: Navigate to category management screen
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('จัดการหมวดหมู่'),
+        content: const Text(
+          'สร้างและจัดการหมวดหมู่สินค้า '
+          'เพื่อจัดระเบียบสินค้าให้ง่ายต่อการค้นหาและเปรียบเทียบ',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('ปิด'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _showAdvancedSettings(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ตั้งค่าขั้นสูง'),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('หน่วยเริ่มต้น:'),
+              SizedBox(height: 8),
+              Text('• น้ำหนัก: กรัม (g)'),
+              Text('• ปริมาตร: มิลลิลิตร (ml)'),
+              Text('• จำนวน: ชิ้น (piece)'),
+              SizedBox(height: 16),
+              Text('ตั้งค่าอื่นๆ:'),
+              SizedBox(height: 8),
+              Text('• จำนวนประวัติสูงสุด: 50 รายการ'),
+              Text('• ความแม่นยำของราคา: 2 ตำแหน่ง'),
+              Text('• การแสดงผลตัวเลข: ตามภาษาท้องถิ่น'),
+            ],
+          ),
         ),
         actions: [
           TextButton(

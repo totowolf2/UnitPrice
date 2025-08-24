@@ -7,7 +7,7 @@ import '../../comparison/presentation/screens/comparison_screen.dart';
 import '../../comparison/presentation/screens/history_screen.dart';
 import '../../settings/presentation/screens/settings_screen.dart';
 
-final currentTabProvider = StateProvider<int>((ref) => 0);
+final currentTabProvider = StateProvider<int>((ref) => 1); // Start with Quick Compare
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -20,10 +20,10 @@ class HomeScreen extends ConsumerWidget {
       body: IndexedStack(
         index: currentTab,
         children: const [
-          ProductListScreen(),
-          ComparisonScreen(),
+          SettingsScreen(), // Move settings to first position (will be accessed via quick compare)
+          ComparisonScreen(), // Quick Compare as default
           HistoryScreen(),
-          SettingsScreen(),
+          SettingsScreen(), // Keep original settings tab for now
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -33,14 +33,14 @@ class HomeScreen extends ConsumerWidget {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.shopping_bag_outlined),
-            selectedIcon: Icon(Icons.shopping_bag),
-            label: AppStrings.products,
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2),
+            label: 'Products', // Will be hidden in settings
           ),
           NavigationDestination(
-            icon: Icon(Icons.compare_arrows_outlined),
-            selectedIcon: Icon(Icons.compare_arrows),
-            label: AppStrings.compare,
+            icon: Icon(Icons.speed_outlined),
+            selectedIcon: Icon(Icons.speed),
+            label: 'Quick Compare',
           ),
           NavigationDestination(
             icon: Icon(Icons.history_outlined),

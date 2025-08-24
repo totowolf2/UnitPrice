@@ -8,6 +8,9 @@ import '../../data/models/comparison_session_model.dart';
 import '../../../products/domain/entities/product.dart';
 import '../../../products/domain/use_cases/calculate_unit_price.dart';
 import '../../../../core/providers/repository_providers.dart';
+import '../../../../core/utils/unit_converter.dart';
+import '../../../../core/utils/app_logger.dart';
+import '../../../../core/constants/unit_types.dart';
 import '../../../../shared/models/comparison_result.dart';
 
 // Use case provider
@@ -29,6 +32,77 @@ final comparisonHistoryProvider = StateNotifierProvider<ComparisonHistoryNotifie
 
 // Selected products for comparison
 final selectedProductsProvider = StateProvider<List<Product>>((ref) => []);
+
+// Quick compare item model
+class QuickCompareItem {
+  final String id;
+  final double price;
+  final double quantity;
+  final Unit unit;
+  final double unitPrice;
+  
+  QuickCompareItem({
+    required this.id,
+    required this.price,
+    required this.quantity,
+    required this.unit,
+    required this.unitPrice,
+  });
+  
+  QuickCompareItem copyWith({
+    String? id,
+    double? price,
+    double? quantity,
+    Unit? unit,
+    double? unitPrice,
+  }) {
+    return QuickCompareItem(
+      id: id ?? this.id,
+      price: price ?? this.price,
+      quantity: quantity ?? this.quantity,
+      unit: unit ?? this.unit,
+      unitPrice: unitPrice ?? this.unitPrice,
+    );
+  }
+}
+
+// Quick compare state
+class QuickCompareState {
+  final List<QuickCompareItem> items;
+  final Unit? baseUnit;
+  final QuickCompareItem? cheapest;
+  final bool isLoading;
+  final String? error;
+  
+  const QuickCompareState({
+    this.items = const [],
+    this.baseUnit,
+    this.cheapest,
+    this.isLoading = false,
+    this.error,
+  });
+  
+  QuickCompareState copyWith({
+    List<QuickCompareItem>? items,
+    Unit? baseUnit,
+    QuickCompareItem? cheapest,
+    bool? isLoading,
+    String? error,
+  }) {
+    return QuickCompareState(
+      items: items ?? this.items,
+      baseUnit: baseUnit ?? this.baseUnit,
+      cheapest: cheapest ?? this.cheapest,
+      isLoading: isLoading ?? this.isLoading,
+      error: error ?? this.error,
+    );
+  }
+}
+
+// Quick compare provider
+final quickCompareProvider = StateNotifierProvider<QuickCompareNotifier, QuickCompareState>((ref) {
+  return QuickCompareNotifier();
+});
 
 // Comparison state notifier
 class ComparisonNotifier extends StateNotifier<AsyncValue<ComparisonResult?>> {
@@ -165,5 +239,162 @@ class ComparisonHistoryNotifier extends StateNotifier<AsyncValue<List<Comparison
     } catch (error, stackTrace) {
       state = AsyncValue.error(error, stackTrace);
     }
+  }
+}
+
+// Quick compare notifier
+class QuickCompareNotifier extends StateNotifier<QuickCompareState> {
+  QuickCompareNotifier() : super(const QuickCompareState());
+  
+  void addItem() {
+    final newItem = QuickCompareItem(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      price: 0,
+      quantity: 0,
+      unit: Unit.values.first,
+      unitPrice: 0,
+    );
+    
+    final updatedItems = [...state.items, newItem];
+    state = state.copyWith(items: updatedItems);
+    
+    AppLogger.logUserAction('add_quick_compare_item', context: {
+      'total_items': updatedItems.length,
+    });
+  }
+  
+  void removeItem(String id) {
+    final updatedItems = state.items.where((item) => item.id != id).toList();
+    state = state.copyWith(items: updatedItems);
+    _recalculateCheapest();
+    
+    AppLogger.logUserAction('remove_quick_compare_item', context: {
+      'remaining_items': updatedItems.length,
+    });
+  }
+  
+  void updateItem(String id, double price, double quantity, Unit unit) {
+    final updatedItems = state.items.map((item) {
+      if (item.id == id) {
+        final unitPrice = _calculateUnitPrice(price, quantity, unit, state.baseUnit);
+        return item.copyWith(
+          price: price,
+          quantity: quantity,
+          unit: unit,
+          unitPrice: unitPrice,
+        );
+      }
+      return item;
+    }).toList();
+    
+    state = state.copyWith(items: updatedItems);
+    _recalculateCheapest();
+  }
+  
+  void setBaseUnit(Unit baseUnit) {
+    // Recalculate all unit prices with new base unit
+    final updatedItems = state.items.map((item) {
+      final unitPrice = _calculateUnitPrice(item.price, item.quantity, item.unit, baseUnit);
+      return item.copyWith(unitPrice: unitPrice);
+    }).toList();
+    
+    state = state.copyWith(
+      baseUnit: baseUnit,
+      items: updatedItems,
+    );
+    _recalculateCheapest();
+  }
+  
+  void clearAll() {
+    final previousItemCount = state.items.length;
+    state = const QuickCompareState();
+    
+    AppLogger.logUserAction('clear_all_quick_compare_items', context: {
+      'cleared_items': previousItemCount,
+    });
+  }
+  
+  void _recalculateCheapest() {
+    if (state.items.isEmpty) {
+      state = state.copyWith(cheapest: null);
+      return;
+    }
+    
+    // Find items with valid data (price > 0, quantity > 0)
+    final validItems = state.items.where((item) => 
+        item.price > 0 && item.quantity > 0).toList();
+    
+    if (validItems.isEmpty) {
+      state = state.copyWith(cheapest: null);
+      return;
+    }
+    
+    // Group by unit type for comparison
+    final unitTypes = <UnitType, List<QuickCompareItem>>{};
+    
+    for (final item in validItems) {
+      final unitType = item.unit.type;
+      if (!unitTypes.containsKey(unitType)) {
+        unitTypes[unitType] = [];
+      }
+      unitTypes[unitType]!.add(item);
+    }
+    
+    // Find cheapest in each unit type group
+    QuickCompareItem? overallCheapest;
+    double cheapestPrice = double.infinity;
+    
+    for (final group in unitTypes.values) {
+      if (group.isNotEmpty) {
+        final groupCheapest = group.reduce((a, b) => 
+            a.unitPrice < b.unitPrice ? a : b);
+        
+        if (groupCheapest.unitPrice < cheapestPrice) {
+          overallCheapest = groupCheapest;
+          cheapestPrice = groupCheapest.unitPrice;
+        }
+      }
+    }
+    
+    state = state.copyWith(cheapest: overallCheapest);
+  }
+  
+  double _calculateUnitPrice(double price, double quantity, Unit unit, Unit? baseUnit) {
+    if (price <= 0 || quantity <= 0) return 0;
+    
+    // Convert to base unit amount
+    final baseUnitAmount = UnitConverter.toBaseUnit(quantity, unit);
+    return price / baseUnitAmount;
+  }
+  
+  List<QuickCompareItem> get sortedItems {
+    final validItems = state.items.where((item) => 
+        item.price > 0 && item.quantity > 0).toList();
+    
+    // Group by unit type and sort within each group
+    final unitTypeGroups = <UnitType, List<QuickCompareItem>>{};
+    
+    for (final item in validItems) {
+      final unitType = item.unit.type;
+      if (!unitTypeGroups.containsKey(unitType)) {
+        unitTypeGroups[unitType] = [];
+      }
+      unitTypeGroups[unitType]!.add(item);
+    }
+    
+    final sortedItems = <QuickCompareItem>[];
+    
+    // Sort each group by unit price
+    for (final group in unitTypeGroups.values) {
+      group.sort((a, b) => a.unitPrice.compareTo(b.unitPrice));
+      sortedItems.addAll(group);
+    }
+    
+    // Add invalid items at the end
+    final invalidItems = state.items.where((item) => 
+        item.price <= 0 || item.quantity <= 0).toList();
+    sortedItems.addAll(invalidItems);
+    
+    return sortedItems;
   }
 }

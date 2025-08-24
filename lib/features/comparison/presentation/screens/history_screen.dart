@@ -147,12 +147,15 @@ class HistoryScreen extends ConsumerWidget {
         return;
       }
       
-      // Navigate to comparison screen with the historical products
+      // Navigate to comparison screen
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) => ComparisonScreen(initialProducts: products),
+          builder: (context) => const ComparisonScreen(),
         ),
       );
+      
+      // TODO: Initialize quick compare with historical products
+      // This would require updating the quick compare provider to accept initial data
     } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
